@@ -32,24 +32,30 @@ upsweep(int* input, int N, int* result, int iter) {
 
     int index = blockIdx.x * blockDim.x + threadIdx.x;
 
-    bool isIndexValid = (index + 1) % iter == 0;
+    bool isIndexValid = index<N && ((index + 1) % iter == 0);
 
     if(isIndexValid) {
-        result[index] = result[index] + result[index - 1];
+        // printf("iter %d, Valid index %d!\n", iter, index);
+        result[index] = result[index] + result[index - iter/2];
     }
 }
 
 __global__ void
 downsweep(int* input, int N, int* result, int iter) {
 
+    // printf("downsweep iter %d\n",  iter);
+
     int index = blockIdx.x * blockDim.x + threadIdx.x;
 
-    bool isIndexValid = (index + 1) % (iter+1) == 0;
+    // printf("iter %d, Valid index %d!\n", iter, index);
+
+    bool isIndexValid = index<N && ((index + 1) % iter == 0);
 
     if(isIndexValid){
-        int t = result[index - iter];
+        // printf("iter %d, Valid index %d!\n", iter, index);
+        int t = result[index - iter/2];
 
-        result[index - iter] = result[index];
+        result[index - iter/2] = result[index];
 
         result[index] = result[index] + t;
     };
@@ -82,22 +88,31 @@ void exclusive_scan(int* input, int N, int* result)
     // to CUDA kernel functions (that you must write) to implement the
     // scan.
 
+    int rounded_length = nextPow2(N);
+        // Padding must be zero because cudaScan only initializes the first N values.
+    if (rounded_length > N) {
+        cudaMemset(result + N, 0, sizeof(int) * (rounded_length - N));
+    }
+
     const int threadsPerBlock = 128;
     const int blocks = (N + threadsPerBlock - 1) / threadsPerBlock;
 
     for(int iter = 2; iter <= N/2; iter *= 2) {
 
         upsweep<<<blocks, threadsPerBlock>>>(input, N, result, iter);
+        cudaDeviceSynchronize();
     }
 
-    cudaDeviceSynchronize();
+
 
     // set the last element to 0
-    cudaMemset(result + (N-1) *sizeof(int), 0, sizeof(int));
+    cudaMemset(result + N - 1, 0, sizeof(int));
 
-    for(int iter = N/2; iter >= 1; iter /= 2) {
+    for(int iter = rounded_length; iter >= 2; iter /= 2) {
+        // printf("iter %d\n", iter);
 
         downsweep<<<blocks, threadsPerBlock>>>(input, N, result, iter);
+        cudaDeviceSynchronize();
     }
 }
 

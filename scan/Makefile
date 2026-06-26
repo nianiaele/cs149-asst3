@@ -22,14 +22,20 @@ endif
 
 OBJDIR=objs
 
-# /usr/local/cuda on this devserver points to a stripped install missing
-# headers/libs. Use the full CUDA 13 install instead.
-CUDA_HOME ?= /usr/local/cuda-13
+# /usr/local/cuda on this devserver points to CUDA 12.8, and the CUDA 13
+# compiler package is installed without runtime headers/libs. If the runtime
+# dev RPM has been extracted locally, use it for headers and libcudart.
+CUDA_HOME ?= /usr/local/cuda-13.0
+CUDA_RUNTIME_HOME ?= $(firstword $(wildcard $(HOME)/.local/cuda-cudart-13.0/usr/local/cuda-13.0 $(CUDA_HOME)))
+CUDA_INC_DIR ?= $(CUDA_RUNTIME_HOME)/include
+CUDA_TARGET_INC_DIR ?= $(CUDA_RUNTIME_HOME)/targets/$(ARCH)-linux/include
+CUDA_CCCL_INC_DIR ?= $(CUDA_TARGET_INC_DIR)/cccl
+CUDA_LIB_DIR ?= $(firstword $(wildcard $(CUDA_RUNTIME_HOME)/targets/$(ARCH)-linux/lib $(CUDA_RUNTIME_HOME)/lib64))
 
-CXXFLAGS=-O3 -Wall -I$(CUDA_HOME)/include
-LDFLAGS=-L$(CUDA_HOME)/lib64/ -lcudart
+CXXFLAGS=-O3 -Wall -I$(CUDA_INC_DIR) -I$(CUDA_TARGET_INC_DIR) -I$(CUDA_CCCL_INC_DIR)
+LDFLAGS=-L$(CUDA_LIB_DIR) -Wl,-rpath,$(CUDA_LIB_DIR) -lcudart
 NVCC=$(CUDA_HOME)/bin/nvcc
-NVCCFLAGS=-O3 -m64 -arch=sm_80
+NVCCFLAGS=-O3 -m64 -arch=sm_80 -I$(CUDA_INC_DIR) -I$(CUDA_TARGET_INC_DIR) -I$(CUDA_CCCL_INC_DIR)
 
 
 OBJS=$(OBJDIR)/main.o  $(OBJDIR)/scan.o

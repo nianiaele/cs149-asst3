@@ -6,7 +6,7 @@
 
 #include "CycleTimer.h"
 
-double cudaFindRepeats(int *input, int length, int *output, int *output_length); 
+double cudaFindRepeats(int *input, int length, int *output, int *output_length);
 double cudaScan(int* start, int* end, int* resultarray);
 double cudaScanThrust(int* start, int* end, int* resultarray);
 void printCudaInfo();
@@ -15,7 +15,7 @@ void printCudaInfo();
 void usage(const char* progname) {
     printf("Usage: %s [options] \n", progname);
     printf("Program Options:\n");
-    printf("  -m  --test <TYPE>      Run specified function on input.  Valid tests are: scan, find_repeats (default: scan)\n"); 
+    printf("  -m  --test <TYPE>      Run specified function on input.  Valid tests are: scan, find_repeats (default: scan)\n");
     printf("  -i  --input <NAME>     Run test on given input type. Valid inputs are: ones, random (default: random)\n");
     printf("  -n  --arraysize <INT>  Number of elements in arrays\n");
     printf("  -t  --thrust           Use Thrust library implementation\n");
@@ -30,14 +30,14 @@ void cpu_exclusive_scan(int* start, int* end, int* output) {
     // note to students: this C code can be helpful when debugging the
     // output of intermediate steps of your CUDA segmented scan.
     // Uncomment the line above to use it as a reference.
-  
+
     int N = end - start;
     memmove(output, start, N*sizeof(int));
-    
+
     // upsweep phase
     for (int twod = 1; twod < N/2; twod*=2) {
         int twod1 = twod*2;
-	
+
         for (int i = 0; i < N; i += twod1) {
 	    output[i+twod1-1] = output[i+twod-1] + output[i+twod1-1];
         }
@@ -55,7 +55,7 @@ void cpu_exclusive_scan(int* start, int* end, int* output) {
         }
     }
 
-#else    
+#else
     int N = end - start;
     output[0] = 0;
     for (int i = 1; i < N; i++) {
@@ -66,22 +66,22 @@ void cpu_exclusive_scan(int* start, int* end, int* output) {
 
 int cpu_find_repeats(int *start, int length, int *output) {
     int count = 0, idx = 0;
-    while (idx < length - 1){ 
+    while (idx < length - 1){
         if (start[idx] == start[idx + 1]){
             output[count] = idx;
             count++;
-        }   
+        }
         idx++;
-    }   
+    }
     return count;
 }
 
 
 int main(int argc, char** argv) {
-  
+
     int N = 64;
     bool useThrust = false;
-    std::string test("scan"); 
+    std::string test("scan");
     std::string input("random");
 
     // parse commandline options ////////////////////////////////////////////
@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
     while ((opt = getopt_long(argc, argv, "m:n:i:?t", long_options, NULL)) != EOF) {
         switch (opt) {
         case 'm':
-            test = optarg; 
+            test = optarg;
             break;
         case 'n':
             N = atoi(optarg);
@@ -131,14 +131,14 @@ int main(int argc, char** argv) {
             inarray[i] = val;
             checkarray[i] = val;
         }
-	
+
     } else {
-      
+
         // all one's test case - you may find this useful for debugging
         for(int i = 0; i < N; i++) {
             inarray[i] = 1;
             checkarray[i] = 1;
-        }  
+        }
     }
 
     printCudaInfo();
@@ -146,9 +146,9 @@ int main(int argc, char** argv) {
     double cudaTime = 50000.;
 
     printf("Array size: %d\n", N);
-    
+
     if (test.compare("scan") == 0) { // test exclusive scan
-      
+
         // run CUDA implementation
         for (int i=0; i<3; i++) {
             if (useThrust)
@@ -160,11 +160,11 @@ int main(int argc, char** argv) {
         // run CPU implementation to check correctness
         cpu_exclusive_scan(inarray, inarray+N, checkarray);
 
-        if (useThrust) { 
+        if (useThrust) {
             printf("Thrust GPU time: %.3f ms\n", 1000.f * cudaTime);
-        } else {    
+        } else {
             printf("Student GPU time: %.3f ms\n", 1000.f * cudaTime);
-        } 
+        }
 
         // validate results
         for (int i = 0; i < N; i++) {
@@ -173,20 +173,24 @@ int main(int argc, char** argv) {
                         "Error: Device exclusive_scan outputs incorrect result."
                         " A[%d] = %d, expecting %d.\n",
                         i, resultarray[i], checkarray[i]);
+                // for(int i = 0; i< N; i++)
+                // {
+                //     printf("(%d, %d, %d)\n", i, resultarray[i], checkarray[i]);
+                // }
                 exit(1);
             }
         }
         printf("Scan outputs are correct!\n");
-	
+
     } else if (test.compare("find_repeats") == 0) { // Test find_repeats
-        
+
         // run CUDA implementation
         int cu_size;
         for (int i=0; i<3; i++) {
             cudaTime = std::min(cudaTime, cudaFindRepeats(inarray, N, resultarray, &cu_size));
         }
 
-        // run CPU implementation to check correctness 
+        // run CPU implementation to check correctness
         int serial_size = cpu_find_repeats(inarray, N, checkarray);
 
         printf("Student GPU time: %.3f ms\n", 1000.f * cudaTime);
@@ -199,7 +203,7 @@ int main(int argc, char** argv) {
                     serial_size, cu_size);
             exit(1);
         }
-	
+
         for (int i = 0; i < serial_size; i++) {
             if (checkarray[i] != resultarray[i]) {
                 fprintf(stderr,
@@ -211,14 +215,14 @@ int main(int argc, char** argv) {
         }
         printf("Find_repeats outputs are correct!\n");
 
-    } else { 
-        usage(argv[0]); 
-        exit(1); 
+    } else {
+        usage(argv[0]);
+        exit(1);
     }
-    
+
     delete [] inarray;
     delete [] resultarray;
     delete [] checkarray;
-    
+
     return 0;
 }
