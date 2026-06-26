@@ -1,0 +1,10 @@
+---------------------------------------------------------
+Found 1 CUDA devices
+Device 0: NVIDIA PG509-210
+   SMs:        108
+   Global mem: 81152 MB
+   CUDA Cap:   8.0
+---------------------------------------------------------
+Array size: 1000000
+Student GPU time: 0.626 ms
+Scan outputs are correct!

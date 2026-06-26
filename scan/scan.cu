@@ -14,7 +14,6 @@
 
 #define THREADS_PER_BLOCK 256
 
-
 // helper function to round an integer up to the next power of 2
 static inline int nextPow2(int n) {
     n--;
@@ -30,12 +29,10 @@ static inline int nextPow2(int n) {
 __global__ void
 upsweep(int* input, int N, int* result, int iter) {
 
-    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    long long op = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    long long index = (op + 1) * iter - 1;
 
-    bool isIndexValid = index<N && ((index + 1) % iter == 0);
-
-    if(isIndexValid) {
-        // printf("iter %d, Valid index %d!\n", iter, index);
+    if(index < N) {
         result[index] = result[index] + result[index - iter/2];
     }
 }
@@ -43,16 +40,10 @@ upsweep(int* input, int N, int* result, int iter) {
 __global__ void
 downsweep(int* input, int N, int* result, int iter) {
 
-    // printf("downsweep iter %d\n",  iter);
+    long long op = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    long long index = (op + 1) * iter - 1;
 
-    int index = blockIdx.x * blockDim.x + threadIdx.x;
-
-    // printf("iter %d, Valid index %d!\n", iter, index);
-
-    bool isIndexValid = index<N && ((index + 1) % iter == 0);
-
-    if(isIndexValid){
-        // printf("iter %d, Valid index %d!\n", iter, index);
+    if(index < N){
         int t = result[index - iter/2];
 
         result[index - iter/2] = result[index];
@@ -95,23 +86,24 @@ void exclusive_scan(int* input, int N, int* result)
     }
 
     const int threadsPerBlock = 128;
-    const int blocks = (N + threadsPerBlock - 1) / threadsPerBlock;
 
-    for(int iter = 2; iter <= N/2; iter *= 2) {
+    for(int iter = 2; iter <= rounded_length; iter *= 2) {
 
-        upsweep<<<blocks, threadsPerBlock>>>(input, N, result, iter);
+        int numOps = rounded_length / iter;
+        int blocks = (numOps + threadsPerBlock - 1) / threadsPerBlock;
+        upsweep<<<blocks, threadsPerBlock>>>(input, rounded_length, result, iter);
         cudaDeviceSynchronize();
     }
 
 
 
-    // set the last element to 0
+    // set the scan tree root to 0
     cudaMemset(result + N - 1, 0, sizeof(int));
 
     for(int iter = rounded_length; iter >= 2; iter /= 2) {
-        // printf("iter %d\n", iter);
-
-        downsweep<<<blocks, threadsPerBlock>>>(input, N, result, iter);
+        int numOps = rounded_length / iter;
+        int blocks = (numOps + threadsPerBlock - 1) / threadsPerBlock;
+        downsweep<<<blocks, threadsPerBlock>>>(input, rounded_length, result, iter);
         cudaDeviceSynchronize();
     }
 }
@@ -199,6 +191,28 @@ double cudaScanThrust(int* inarray, int* end, int* resultarray) {
     return overallDuration;
 }
 
+__global__ void
+mark_repeats(int* device_input, int length, int* device_output) {
+
+    long long index = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(index < length -1 && device_input[index] == device_input[index +1]){
+        device_output[index] = 1;
+    }
+
+}
+
+__global__ void
+gather(int* scan_array, int length, int* device_output, int* mark_array) {
+
+    long long index = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(index < length -1 && mark_array[index] == 1){
+        int sequence = scan_array[index];
+        device_output[sequence] = index;
+    }
+}
+
 
 // find_repeats --
 //
@@ -219,8 +233,42 @@ int find_repeats(int* device_input, int length, int* device_output) {
     // exclusive_scan function with them. However, your implementation
     // must ensure that the results of find_repeats are correct given
     // the actual array length.
+    int rounded_length = nextPow2(length);
 
-    return 0;
+    // create intermediat values
+    int *mark_array;
+    int *scan_array;
+
+    cudaMalloc((void **)&mark_array, rounded_length * sizeof(int));
+    cudaMalloc((void **)&scan_array, rounded_length * sizeof(int));
+
+    cudaMemset(device_output, 0, sizeof(int) * rounded_length);
+    cudaMemset(mark_array, 0, sizeof(int) * rounded_length);
+    cudaMemset(scan_array, 0, sizeof(int) * rounded_length);
+
+    // compute block and thread number
+    const int threadsPerBlock = 128;
+    int blocks = (rounded_length + threadsPerBlock - 1) / threadsPerBlock;
+
+    // mark 1 for repeat position
+    mark_repeats<<<blocks, threadsPerBlock>>>(device_input, length, mark_array);
+    cudaDeviceSynchronize();
+
+    // accumulate the marks in scan
+    cudaMemcpy(scan_array, mark_array, rounded_length * sizeof(int), cudaMemcpyDeviceToDevice);
+    exclusive_scan(mark_array, length, scan_array);
+
+    // gather the repeated index to output
+    gather<<<blocks, threadsPerBlock>>>(scan_array, length, device_output, mark_array);
+    cudaDeviceSynchronize();
+
+    int result;
+    cudaMemcpy(&result, scan_array + length - 1, sizeof(int), cudaMemcpyDeviceToHost);
+
+    cudaFree(mark_array);
+    cudaFree(scan_array);
+
+    return result;
 }
 
 
