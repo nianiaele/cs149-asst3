@@ -1,0 +1,25 @@
+Rendering to 1024x1024 image
+Loaded scene with 3 circles
+Loaded scene with 3 circles
+---------------------------------------------------------
+Initializing CUDA for CudaRenderer
+Found 1 CUDA devices
+Device 0: NVIDIA PG509-210
+   SMs:        108
+   Global mem: 81152 MB
+   CUDA Cap:   8.0
+---------------------------------------------------------
+
+Running benchmark, 1 frames, beginning at frame 0 ...
+Dumping frames to logs/output_xxx.ppm
+Copying image data from device
+Wrote image file logs/output_0000.ppm
+Copying image data from device
+***************** Correctness check passed **************************
+Clear:    0.1857 ms
+Advance:  0.0053 ms
+Render:   0.2476 ms
+Total:    0.4386 ms
+File IO:  392.8528 ms
+
+Overall:  0.4326 sec (note units are seconds)
